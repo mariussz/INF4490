@@ -1,17 +1,43 @@
 import itertools as itt
 import random as r
 from math import factorial
+from timeit import default_timer as timer 
+
+
+
+
+
+for i in range(10):
+    print(i)
+
+
+
+
+
+
+#start = timer()
+#for i in range(1000):
+    #x = 2 ** 323324
+    #x = x**5
+#end = timer()
+#result = round(end - start,3)
+
+#file_w = open("_ble_ble_file.txt", 'a')
+#file_w.write("abcd1234\n")
+#file_w.close()
+
 
 
 
 #print(r.randint(0,1))
 
-genotype = list([3,4,5,2,3,1,7])
+#genotype = list([3,4,5,2,3,1,7])
 
 
-print(genotype)
-print(genotype.index(5))
-print(genotype)
+#for x in range(4):
+    #print(x)
+
+
 
 
 

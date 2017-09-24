@@ -1,9 +1,11 @@
 #!/usr/bin/env python
 from csv import reader
 import itertools as itt
-import time
+from timeit import default_timer as timer
 from random import sample, randint
 from math import factorial
+from numpy import std, mean
+
 
 
 class Traveling_salesman:
@@ -59,16 +61,22 @@ class Traveling_salesman:
                 offspring[ind] = parent2[ind]            
         
         return offspring
-    def _citi_names_to_id(self, names):
+    def _cities_names_to_ids(self, cities_names):
         ret_list = []
-        for name in names:
+        for name in cities_names:
             if name in self.cities:
                 citi_id = self.cities.index(name)
                 ret_list.append(citi_id)
             else:
                 print("The city {} not exists in the list".format(name))
         return ret_list
-    
+    def _cities_ids_to_names(self, cities_ids):
+        ret_list = []
+        for city_id in cities_ids:
+            city_name = self.cities[city_id]
+            ret_list.append(city_name)
+            
+        return ret_list
     def _get_random_subset(self, input_list):
         if len(input_list) >= 5:
             point_a = sample(range(0,len(input_list)-3), 1)[0]
@@ -83,7 +91,7 @@ class Traveling_salesman:
     
     
     
-    def _mutate(self, genotype, mutation_type = 0):
+    def _mutate(self, genotype, mutation_type = 1):
         return_genotype = genotype[:]
         
         if mutation_type == 0:
@@ -134,7 +142,29 @@ class Traveling_salesman:
         return return_genotype
         
     
-    def exhaustive_search(self, number_of_cities= 10):
+    def _save_to_file(self, file_name, data):
+        try:
+            file = open(file_name, 'a')
+        
+            try:
+                if isinstance(data, list):
+                    for line in data:
+                        file.write(str(line) + "\n")
+                else:
+                    file.write(str(data) + "\n")
+                
+            except IOError as e:
+                print(e)
+            finally:
+                file.close()
+        
+        except (IOError, OSError) as e:
+            print(e)
+        
+    def exhaustive_search(self, number_of_cities= 10, report_file= None):
+        if report_file != None:
+            self.start = timer()
+        
         shortest_distance = 0
         shortest_path = ()
         
@@ -146,11 +176,22 @@ class Traveling_salesman:
                 shortest_distance = calculated_distance
                 shortest_path = path[:]
         
+        if report_file != None:
+            self.stop = timer()
+            report = "Number of cities {}\nMeasured time= {}\n".format(number_of_cities,round(self.stop - self.start,3))
+            report += "The best fitnes = {}\n".format(shortest_distance)
+            report += "The tour = {}\n".format(self._cities_ids_to_names(shortest_path))
+            self._save_to_file(report_file,report)
+            
+        
         return list([shortest_distance,shortest_path])
     
     
     
-    def hill_climbing(self, number_of_cities= 24, number_of_generations= 100, genotype = None):
+    def hill_climbing(self, number_of_cities= 24, number_of_generations= 50, genotype = None, report_file= None):
+        
+        if report_file != None:
+            self.start = timer()        
         
         if genotype is None:
             genotype = sample(range(0,number_of_cities), number_of_cities)
@@ -166,24 +207,35 @@ class Traveling_salesman:
             if new_distance < shortest_distance:
                 counter = number_of_generations         #reset the counter after sucess and continue 
                 shortest_distance = new_distance
-                best_genotype[:] = new_genotype[:]
+                best_genotype = new_genotype[:]
             counter -= 1
             
+        if report_file != None:
+            self.stop = timer()
+            report = "Number of cities = {}, number of generations = {}, measured time= {}\n".format(number_of_cities,number_of_generations, round(self.stop - self.start,3))
+            report += "The best result = {}\n".format(list([shortest_distance,best_genotype]))
+            report += "The best result = {}\n".format(list([shortest_distance,self._cities_ids_to_names(best_genotype)]))
+            self._save_to_file(report_file,report)        
+        
+        
         return list([shortest_distance,best_genotype])
 
 
 
 
     def genetic_algorithm(self, population_size = 10, number_of_cities= 24, 
-                          number_of_generations = 100, couple_with_hill_climbing = False):
-        """Description"""
+                          number_of_generations = 100, couple_with_hill_climbing = False, report_file= None):
+        if report_file != None:
+            self.start = timer()
+            
         population = []
         distances = []
         all_sol = factorial(number_of_cities)                                       #number of all possible solutions- permutation
         population_size = population_size - (population_size%2)                     #to make sure the population size is an even number
         start = randint(0, number_of_cities - (number_of_cities // 2))              #slice starting point. Genotype's length is the same as the number_of_cities
         stop = start + (number_of_cities // 2)                                      #the length of a slice
-        
+        best_generations_results = []
+        iterations = number_of_generations
         
         #initialise population
         while len(population) < population_size and len(population) < all_sol:      #..and prevent infinite loop
@@ -198,14 +250,14 @@ class Traveling_salesman:
             distances.append(distance)
             
         #repeat until termination condition is reached
-        while number_of_generations > 0:
+        while iterations > 0:
             #select parents (ids)          
             parents_pairs = self._select_parents(population_size)
             offsprings = []
-            offsprings_distances = []
+            offsprings_distances = [None] * len(population)
             
             #recombine pairs- crossover
-            for pair in parents_pairs:
+            for idp, pair in enumerate(parents_pairs):
                 parent1 = population[pair[0]][:]
                 parent2 = population[pair[1]][:]                
                 
@@ -215,10 +267,6 @@ class Traveling_salesman:
                 new_offspring = self._recombine_pairs(start,stop,parent1,parent2)
                 offsprings.append(new_offspring)
                 #print("new_offspring from p1 and p2 = {}".format(new_offspring))
-                
-                new_offspring = self._recombine_pairs(start,stop,parent2,parent1)
-                offsprings.append(new_offspring)
-                #print("new_offspring from p2 and p1 = {}".format(new_offspring))
             
             #print(new_offspring)
             
@@ -230,39 +278,39 @@ class Traveling_salesman:
             
             #Hybrid Algorithm if necessery
             if couple_with_hill_climbing:
-                better = 0
-                bet_dis = 0
-                worse = 0
-                wor_dis = 0
-                for idg, genotype in enumerate(population):
-                    current_distance = distances[idg]
-                    improved_genotype = self.hill_climbing(number_of_cities, number_of_generations, 
-                                                           genotype = genotype)
-                    if improved_genotype[0] < current_distance:
-                        #print(improved_genotype)
-                        wor_dis = distances[idg]
-                        bet_dis = improved_genotype[0]
-                        distances[idg] = improved_genotype[0]
-                        population[idg] = improved_genotype[1]
-                        better += 1                        
-                    else:
-                        worse += 1
-                #print("dist: {} to {} \t Better: {}, worse: {}".format(wor_dis, bet_dis, better, worse))            
+                
+                for idg, genotype in enumerate(offsprings):
+                    tmp_genotype = genotype[:]
+                    tmp_distance = self._calculate_the_distance(tmp_genotype)
+                    
+                    new_genotype = self.hill_climbing(number_of_cities, number_of_generations= 50, 
+                                                           genotype = tmp_genotype)
+                    if new_genotype[0] < tmp_distance:
+                        #offsprings_distances[idg] = new_genotype[0]
+                        offsprings[idg] = new_genotype[1]
             
+            best_result = 0
+            best_genotype = [None]
             #evaluate new candidates
-            for genotype in offsprings:
+            for idg, genotype in enumerate(offsprings):
                 distance = self._calculate_the_distance(genotype)
-                offsprings_distances.append(distance)                
+                offsprings_distances[idg] = distance
+                if best_result == 0 or best_result > distance:
+                    best_result = distance
+                    best_genotype = genotype[:]
             
-            #select individuals for the next generation
-            for ido, offspring_distance in enumerate(offsprings_distances):
-                for idp, parent_distance in enumerate(distances):
+            best_generations_results.append(best_result)
+             
+            #select individuals for the next generation                        
+            for idod, offspring_distance in enumerate(offsprings_distances):
+                for idpd, parent_distance in enumerate(distances):
                     if parent_distance > offspring_distance:        #look for the first worse solution in population and override it
-                        distances[idp] = offspring_distance
-                        population[idp] = offsprings[ido][:]
+                        distances[idpd] = offspring_distance
+                        population[idpd] = offsprings[idod][:]
                         break
-                        
-            number_of_generations -= 1
+            
+            
+            iterations -= 1
         
               
         
@@ -271,11 +319,27 @@ class Traveling_salesman:
         shortest_distance = None
         shortest_path = None
         for idd, distance in enumerate(distances):
-            if shortest_distance is None or idd == 0:
+            if shortest_distance is None:
                 shortest_distance = distance
                 shortest_path = population[idd]
+            else:
+                if shortest_distance > distance:
+                    shortest_distance = distance
+                    shortest_path = population[idd]
+                
             
-        print(list([shortest_distance,shortest_path]))
+        #print(list([shortest_distance,shortest_path]))
+
+        if report_file != None:
+            self.stop = timer()
+            report = "Average fitness in all generations = {}".format(round(mean(best_generations_results),2))
+            #report = "Number of cities = {}, population_size = {}, number of generations = {}, measured time = {}\n".format(
+                #number_of_cities, population_size, number_of_generations, round(self.stop - self.start,3))
+            #report += "The best result = {}\n".format(list([shortest_distance,shortest_path]))
+            #report += "The best result = {}\n".format(list([shortest_distance,self._cities_ids_to_names(shortest_path)]))            
+            #report += "The average of the bests across runs = {}\n".format(avg_of_bests)
+            self._save_to_file(report_file,report)        
+
 
         return list([shortest_distance,shortest_path])
         
