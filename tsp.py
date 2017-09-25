@@ -161,6 +161,7 @@ class Traveling_salesman:
         except (IOError, OSError) as e:
             print(e)
         
+    
     def exhaustive_search(self, number_of_cities= 10, report_file= None):
         if report_file != None:
             self.start = timer()
@@ -188,10 +189,9 @@ class Traveling_salesman:
     
     
     
-    def hill_climbing(self, number_of_cities= 24, number_of_generations= 50, genotype = None, report_file= None):
-        
-        if report_file != None:
-            self.start = timer()        
+    
+    def hill_climbing(self, number_of_cities= 24, number_of_generations= 50, genotype = None):
+        self.start_hc = timer()        
         
         if genotype is None:
             genotype = sample(range(0,number_of_cities), number_of_cities)
@@ -199,6 +199,7 @@ class Traveling_salesman:
         shortest_distance = self._calculate_the_distance(genotype)
         best_genotype = genotype[:]
         counter = number_of_generations
+        best_generations_results = []
         
         while counter > 0:
             new_genotype = self._mutate(best_genotype, mutation_type = 1)
@@ -208,25 +209,21 @@ class Traveling_salesman:
                 counter = number_of_generations         #reset the counter after sucess and continue 
                 shortest_distance = new_distance
                 best_genotype = new_genotype[:]
+            
+            best_generations_results.append(new_distance)   #in each generation the only genotype is the best 
             counter -= 1
             
-        if report_file != None:
-            self.stop = timer()
-            report = "Number of cities = {}, number of generations = {}, measured time= {}\n".format(number_of_cities,number_of_generations, round(self.stop - self.start,3))
-            report += "The best result = {}\n".format(list([shortest_distance,best_genotype]))
-            report += "The best result = {}\n".format(list([shortest_distance,self._cities_ids_to_names(best_genotype)]))
-            self._save_to_file(report_file,report)        
-        
-        
-        return list([shortest_distance,best_genotype])
+        self.stop_hc = timer()
+        wynik = list([shortest_distance,best_genotype, mean(best_generations_results), round(self.stop_hc - self.start_hc,3)]) 
+        return wynik
 
 
 
 
     def genetic_algorithm(self, population_size = 10, number_of_cities= 24, 
-                          number_of_generations = 100, couple_with_hill_climbing = False, report_file= None):
-        if report_file != None:
-            self.start = timer()
+                          number_of_generations = 100, generations_in_hill_climbing = 0, learning_model= "L"):
+            
+        self.start_ga = timer()
             
         population = []
         distances = []
@@ -256,7 +253,7 @@ class Traveling_salesman:
             offsprings = []
             offsprings_distances = [None] * len(population)
             
-            #recombine pairs- crossover
+            #recombine pairs- partially mapped crossover
             for idp, pair in enumerate(parents_pairs):
                 parent1 = population[pair[0]][:]
                 parent2 = population[pair[1]][:]                
@@ -266,49 +263,53 @@ class Traveling_salesman:
                 
                 new_offspring = self._recombine_pairs(start,stop,parent1,parent2)
                 offsprings.append(new_offspring)
-                #print("new_offspring from p1 and p2 = {}".format(new_offspring))
+              
             
-            #print(new_offspring)
+            #Mutation of offsprings
+            for o_genotype in offsprings:
+                genes_ab = sample(range(0,len(o_genotype)),2)                                     #generate two random gene ids to swap
+                o_genotype[genes_ab[0]], o_genotype[genes_ab[1]] = o_genotype[genes_ab[1]], o_genotype[genes_ab[0]]     #swap the given genes            
             
+                       
             
-            #Mutation of offspring
-            for genotype in offsprings:
-                genes_ab = sample(range(0,len(genotype)),2)                                     #generate two random gene ids to swap
-                genotype[genes_ab[0]], genotype[genes_ab[1]] = genotype[genes_ab[1]], genotype[genes_ab[0]]     #swap the given genes            
+            #evaluate new candidates
+            for idog, o_genotype in enumerate(offsprings):
+                distance = self._calculate_the_distance(o_genotype)
+                offsprings_distances[idog] = distance            
+            
             
             #Hybrid Algorithm if necessery
-            if couple_with_hill_climbing:
-                
-                for idg, genotype in enumerate(offsprings):
-                    tmp_genotype = genotype[:]
-                    tmp_distance = self._calculate_the_distance(tmp_genotype)
+           
+            if generations_in_hill_climbing > 0:
+                for idog, o_genotype in enumerate(offsprings):
+                    tmp_genotype = o_genotype[:]
+                    tmp_distance = offsprings_distances[idog] #self._calculate_the_distance(tmp_genotype)
                     
-                    new_genotype = self.hill_climbing(number_of_cities, number_of_generations= 50, 
-                                                           genotype = tmp_genotype)
+                    new_genotype = self.hill_climbing(number_of_cities, 
+                                                      number_of_generations= generations_in_hill_climbing, 
+                                                      genotype = tmp_genotype)
+                    
                     if new_genotype[0] < tmp_distance:
-                        #offsprings_distances[idg] = new_genotype[0]
-                        offsprings[idg] = new_genotype[1]
+                        if learning_model == "L":        #Lamarckian learning model
+                            offsprings_distances[idog] = new_genotype[0]
+                            offsprings[idog] = new_genotype[1]
+                        else:                            #Baldwinian learning model
+                            offsprings_distances[idog] = new_genotype[0]
+                            #offsprings[idog] = new_genotype[1]   #inherit the "new trait" only
+           
+            
             
             best_result = 0
-            best_genotype = [None]
-            #evaluate new candidates
-            for idg, genotype in enumerate(offsprings):
-                distance = self._calculate_the_distance(genotype)
-                offsprings_distances[idg] = distance
-                if best_result == 0 or best_result > distance:
-                    best_result = distance
-                    best_genotype = genotype[:]
-            
-            best_generations_results.append(best_result)
-             
-            #select individuals for the next generation                        
+            #select individuals for the next generation                      
             for idod, offspring_distance in enumerate(offsprings_distances):
+                if best_result == 0 or best_result > offspring_distance:
+                    best_result = offspring_distance                  
                 for idpd, parent_distance in enumerate(distances):
                     if parent_distance > offspring_distance:        #look for the first worse solution in population and override it
                         distances[idpd] = offspring_distance
                         population[idpd] = offsprings[idod][:]
                         break
-            
+            best_generations_results.append(best_result)
             
             iterations -= 1
         
@@ -328,25 +329,16 @@ class Traveling_salesman:
                     shortest_path = population[idd]
                 
             
-        #print(list([shortest_distance,shortest_path]))
-
-        if report_file != None:
-            self.stop = timer()
-            report = "Average fitness in all generations = {}".format(round(mean(best_generations_results),2))
-            #report = "Number of cities = {}, population_size = {}, number of generations = {}, measured time = {}\n".format(
-                #number_of_cities, population_size, number_of_generations, round(self.stop - self.start,3))
-            #report += "The best result = {}\n".format(list([shortest_distance,shortest_path]))
-            #report += "The best result = {}\n".format(list([shortest_distance,self._cities_ids_to_names(shortest_path)]))            
-            #report += "The average of the bests across runs = {}\n".format(avg_of_bests)
-            self._save_to_file(report_file,report)        
-
-
-        return list([shortest_distance,shortest_path])
+        self.stop_ga = timer()
+        return list([shortest_distance,shortest_path, mean(best_generations_results), round(self.stop_ga - self.start_ga,3)])
         
         
 
-    def hybrid_algorithm(self, population_size = 10, number_of_cities= 24, number_of_generations = 100):
-        return self.genetic_algorithm(population_size, number_of_cities, number_of_generations, couple_with_hill_climbing= True)
+    def hybrid_algorithm(self, population_size = 10, number_of_cities= 24, number_of_generations = 100, 
+                         generations_in_hill_climbing = 10, learning_model= "L"):
+        return self.genetic_algorithm(population_size, number_of_cities, number_of_generations, 
+                                      generations_in_hill_climbing, learning_model)
+      
         
 
 
