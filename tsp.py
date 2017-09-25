@@ -337,7 +337,7 @@ class Traveling_salesman:
     def hybrid_algorithm(self, population_size = 10, number_of_cities= 24, number_of_generations = 100, 
                          generations_in_hill_climbing = 10, learning_model= "L"):
         return self.genetic_algorithm(population_size, number_of_cities, number_of_generations, 
-                                      generations_in_hill_climbing, learning_model)
+                                      generations_in_hill_climbing, learning_model )
       
         
 
